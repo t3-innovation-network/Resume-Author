@@ -3,7 +3,13 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Resume Upload Page (/resume/upload)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/resume/upload');
+    // Set up authenticated state by setting token in localStorage
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      localStorage.setItem('auth', 'mock-access-token-12345');
+      localStorage.setItem('refresh_token', 'mock-refresh-token-12345');
+    });
+    await page.goto('/resume/upload', { waitUntil: 'domcontentloaded' });
   });
 
   test('loads the resume upload page successfully', async ({ page }) => {

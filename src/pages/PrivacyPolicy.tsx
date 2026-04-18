@@ -50,8 +50,8 @@ const PrivacyPolicy: React.FC = () => {
               secondary={
                 <>
                   <Typography component='span' sx={{ color: '#47516B' }}>
-                    We use authentication services such as Auth0 and digital wallet
-                    sign-in. During login, identifiers (for example, your Auth0 user ID),
+                    We use authentication services such as Google Auth and digital wallet
+                    sign-in. During login, identifiers (for example, your Google user ID),
                     access tokens, and refresh tokens may be stored securely in your
                     browser storage to maintain your session.
                   </Typography>
@@ -169,7 +169,7 @@ const PrivacyPolicy: React.FC = () => {
         <Typography sx={{ mb: 3 }}>
           We do not sell your data. We share information only as needed to operate the app
           or when you explicitly authorize integrations (for example, storing files in
-          your Google Drive). Third-party services such as Auth0, Google, Firebase, or
+          your Google Drive). Third-party services such as Google, Firebase, or
           wallet providers process your data under their own terms and privacy policies.
         </Typography>
 

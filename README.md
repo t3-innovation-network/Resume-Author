@@ -15,7 +15,7 @@ Resume Author is part of the **T3 Innovation Network** initiative, designed to c
 
 ### Key Features
 
-- 🔐 **Secure Authentication**: Multiple authentication methods including Google OAuth, Auth0, and digital wallet integration
+- 🔐 **Secure Authentication**: Multiple authentication methods including Google OAuth, and digital wallet integration
 - 📱 **Responsive Design**: Works seamlessly across desktop and mobile devices
 - 🎨 **Rich Text Editor**: Advanced text editing capabilities with custom formatting
 - 📊 **Progress Tracking**: Visual indicators for resume completion
@@ -28,7 +28,7 @@ Resume Author is part of the **T3 Innovation Network** initiative, designed to c
 - **Frontend**: React 18 with TypeScript
 - **State Management**: Redux Toolkit
 - **UI Framework**: Material-UI (MUI) v6
-- **Authentication**: Auth0, Google OAuth
+- **Authentication**: Google OAuth
 - **Storage**: Google Drive API, Firebase
 - **PDF Generation**: jsPDF, html2pdf.js
 - **Text Editor**: Quill.js with custom extensions
@@ -42,7 +42,6 @@ Resume Author is part of the **T3 Innovation Network** initiative, designed to c
 - Node.js (v16 or higher)
 - npm or yarn package manager
 - Google Cloud Platform account (for Google Drive integration)
-- Auth0 account (for authentication)
 - Firebase project (for additional storage)
 
 ### Installation
@@ -70,10 +69,6 @@ Resume Author is part of the **T3 Innovation Network** initiative, designed to c
    # Google OAuth
    REACT_APP_GOOGLE_CLIENT_ID=your_google_client_id
    REACT_APP_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback
-
-   # Auth0 Configuration
-   REACT_APP_AUTH0_DOMAIN=your_auth0_domain
-   REACT_APP_AUTH0_CLIENT_ID=your_auth0_client_id
 
    # Backend Server
    REACT_APP_SERVER_URL=https://linkedcreds.allskillscount.org

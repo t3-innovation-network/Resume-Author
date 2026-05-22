@@ -60,6 +60,13 @@ const getCredentialName = (vc: any): string => {
       return credentialSubject.credentialName
     }
 
+    if (credentialSubject.skill?.[0]?.name) {
+      return credentialSubject.skill[0].name
+    }
+    if (credentialSubject.name) {
+      return credentialSubject.name
+    }
+
     if (
       Array.isArray(credentialSubject.achievement) &&
       credentialSubject.achievement.length > 0 &&

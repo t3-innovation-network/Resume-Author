@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import { getLocalStorage } from '../tools/cookie'
 import { useSelector, useDispatch } from 'react-redux'
 import { clearAuth, setAuth } from '../redux/slices/auth'
+import { clearVCs } from '../redux/slices/vc'
 import { RootState } from '../redux/store'
 import Notification from './common/Notification'
 import MenuIcon from '@mui/icons-material/Menu'
@@ -60,6 +61,7 @@ const Nav = () => {
   const handleLogout = () => {
     logout()
     dispatch(clearAuth())
+    dispatch(clearVCs())
     setShowNotification(true)
     navigate('/')
     setMobileMenuOpen(false)

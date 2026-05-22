@@ -50,26 +50,44 @@ export const fetchVCs = createAsyncThunk('vc/fetchVCs', async () => {
   const storageService = StorageService.getInstance()
   storageService.initialize(accessToken)
 
-  const claimsData: any[] = await storageService.handleApiCall(async () => {
-    const storage = storageService.getStorage()
-    return await storage.getAllFilesByType('VCs')
-  })
+  let claimsData: any[] = []
+  try {
+    claimsData = await storageService.handleApiCall(async () => {
+      const storage = storageService.getStorage()
+      return await storage.getAllFilesByType('VCs')
+    })
+  } catch (error) {
+    console.error('fetchVCs: getAllFilesByType failed:', error)
+    throw new Error(
+      'Could not read credentials from Google Drive. Ensure Resume-Author uses the same Google OAuth Client ID as LinkedCreds.'
+    )
+  }
+
+  if (!Array.isArray(claimsData)) {
+    claimsData = []
+  }
 
 
 
   const vcs = claimsData
-    .filter(item => item.data && item.data.fileName)
     .map(item => {
-      const parsedBody = JSON.parse(item.data.body)
-      // Store the Google Drive file ID separately from the credential ID
-      return {
-        id: item.id, // Use the Google Drive file ID as the main ID
-        ...parsedBody,
-        credentialId: item.id, // Also store it as credentialId for the viewer
-        urnId: parsedBody.id, // Keep the URN ID separately if needed
-        originalItem: item // Keep original item if needed
+      try {
+        const body = item?.data?.body
+        if (!body) return null
+        const parsedBody = typeof body === 'string' ? JSON.parse(body) : body
+        return {
+          ...parsedBody,
+          id: item.id, // Google Drive file ID (after spread so URN does not overwrite)
+          credentialId: item.id,
+          urnId: parsedBody.id,
+          originalItem: item
+        }
+      } catch (e) {
+        console.warn('Skipping VC file that failed to parse:', item?.id, e)
+        return null
       }
     })
+    .filter((vc): vc is NonNullable<typeof vc> => vc != null)
 
   // If you want to log the VCs as JSON
 

@@ -38,7 +38,9 @@ const RightSidebar = ({
   const location = useLocation()
   const { accessToken, isAuthenticated } = useSelector((state: RootState) => state.auth)
   const dispatch: AppDispatch = useDispatch()
-  const { vcs } = useSelector((state: any) => state.vcReducer)
+  const { vcs, status: vcStatus, error: vcError } = useSelector(
+    (state: any) => state.vcReducer
+  )
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const resume = useSelector((state: RootState) => state.resume?.resume)
 
@@ -127,11 +129,15 @@ const RightSidebar = ({
   }, [getAllFiles, onAllFilesUpdate])
 
   useEffect(() => {
+    if (!accessToken) {
+      setIsLoading(false)
+      return
+    }
     setIsLoading(true)
     dispatch(fetchVCs())
       .then(() => setIsLoading(false))
       .catch(() => setIsLoading(false))
-  }, [dispatch])
+  }, [dispatch, accessToken])
 
   const handleGoogleLogin = async () => {
     await login(location.pathname)
@@ -188,6 +194,14 @@ const RightSidebar = ({
       }
       if (credentialSubject.credentialName) {
         return credentialSubject.credentialName
+      }
+
+      // LinkedCreds SkillClaimCredential (e.g. "test resume author")
+      if (credentialSubject.skill?.[0]?.name) {
+        return credentialSubject.skill[0].name
+      }
+      if (credentialSubject.name) {
+        return credentialSubject.name
       }
 
       if (
@@ -351,16 +365,31 @@ const RightSidebar = ({
       )
     }
 
+    const loadedCount = Array.isArray(vcs) ? vcs.length : 0
+    let message = 'No credentials found.'
+    if (vcStatus === 'failed' && vcError) {
+      message = `Could not load credentials: ${vcError}`
+    } else if (loadedCount > 0) {
+      message =
+        `${loadedCount} credential(s) loaded from Drive but none could be displayed. Try Import Credentials from Google Drive.`
+    } else if (!accessToken) {
+      message = 'Sign in with Google to load credentials from your wallet.'
+    } else {
+      message +=
+        ' Credentials are stored per Google OAuth app — use the same Client ID as LinkedCreds in .env.'
+    }
+
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 1 }}>
         <Typography
           sx={{
-            fontSize: 16,
+            fontSize: 14,
             color: '#9CA3AF',
-            fontFamily: 'Nunito Sans'
+            fontFamily: 'Nunito Sans',
+            textAlign: 'center'
           }}
         >
-          No credentials found.
+          {message}
         </Typography>
       </Box>
     )

@@ -9,6 +9,7 @@ import useDraftResume from '../hooks/useDraftResume'
 import { logout } from '../tools/auth'
 import AuthErrorDisplay from './common/AuthErrorDisplay'
 import { clearAuth } from '../redux/slices/auth'
+import { clearVCs } from '../redux/slices/vc'
 
 const buttonStyles = {
   background: '#3A35A2',
@@ -52,6 +53,7 @@ const ResumeScreen: React.FC = () => {
   const handleLogout = useCallback(() => {
     logout()
     dispatch(clearAuth())
+    dispatch(clearVCs())
     navigate('/')
   }, [navigate, dispatch])
 

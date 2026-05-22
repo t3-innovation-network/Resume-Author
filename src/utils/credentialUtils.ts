@@ -12,12 +12,12 @@ export interface SelectedCredential {
 export function getCredentialName(vc: any): string {
   try {
     if (!vc || typeof vc !== 'object') {
-      return 'Invalid Credential'
+      return ''
     }
-    
+
     const credentialSubject = vc.credentialSubject
     if (!credentialSubject || typeof credentialSubject !== 'object') {
-      return 'Unknown Credential'
+      return typeof vc.name === 'string' ? vc.name : ''
     }
     
     // Check various credential types
@@ -33,13 +33,28 @@ export function getCredentialName(vc: any): string {
     if (credentialSubject.credentialName) {
       return credentialSubject.credentialName
     }
-    if (credentialSubject.achievement && Array.isArray(credentialSubject.achievement)) {
-      if (credentialSubject.achievement[0]?.name) {
-        return credentialSubject.achievement[0].name
-      }
+    if (credentialSubject.skill?.[0]?.name) {
+      return credentialSubject.skill[0].name
     }
-    
-    return 'Credential'
+    if (credentialSubject.name) {
+      return credentialSubject.name
+    }
+    if (Array.isArray(credentialSubject.achievement) && credentialSubject.achievement[0]?.name) {
+      return credentialSubject.achievement[0].name
+    }
+    if (
+      credentialSubject.achievement &&
+      typeof credentialSubject.achievement === 'object' &&
+      !Array.isArray(credentialSubject.achievement) &&
+      credentialSubject.achievement.name
+    ) {
+      return credentialSubject.achievement.name
+    }
+    if (typeof vc.name === 'string' && vc.name.trim()) {
+      return vc.name
+    }
+
+    return ''
   } catch (error) {
     console.error('Error getting credential name:', error)
     return 'Credential'

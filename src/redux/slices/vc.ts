@@ -50,24 +50,15 @@ export const fetchVCs = createAsyncThunk('vc/fetchVCs', async () => {
   const storageService = StorageService.getInstance()
   storageService.initialize(accessToken)
 
-  let claimsData: any[] = []
-  try {
-    claimsData = await storageService.handleApiCall(async () => {
+  const claimsData =
+    (await storageService.handleApiCall(async () => {
       const storage = storageService.getStorage()
       return await storage.getAllFilesByType('VCs')
-    })
-  } catch (error) {
-    console.error('fetchVCs: getAllFilesByType failed:', error)
-    throw new Error(
-      'Could not read credentials from Google Drive. Ensure Resume-Author uses the same Google OAuth Client ID as LinkedCreds.'
-    )
-  }
+    })) ?? []
 
   if (!Array.isArray(claimsData)) {
-    claimsData = []
+    return []
   }
-
-
 
   const vcs = claimsData
     .map(item => {
@@ -88,9 +79,6 @@ export const fetchVCs = createAsyncThunk('vc/fetchVCs', async () => {
       }
     })
     .filter((vc): vc is NonNullable<typeof vc> => vc != null)
-
-  // If you want to log the VCs as JSON
-
 
   return vcs
 })

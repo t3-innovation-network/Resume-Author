@@ -3,6 +3,7 @@ import { Box, Typography, Button, Checkbox, styled } from '@mui/material'
 import { useDispatch, useSelector } from 'react-redux'
 import { AppDispatch } from '../redux/store'
 import { fetchVCs } from '../redux/slices/vc'
+import { getCredentialName } from '../utils/credentialUtils'
 
 interface CredentialOverlayProps {
   onClose?: () => void
@@ -35,52 +36,6 @@ const StyledScrollbar = styled(Box)({
     borderRadius: '30px'
   }
 })
-
-const getCredentialName = (vc: any): string => {
-  try {
-    if (!vc || typeof vc !== 'object') {
-      return ''
-    }
-
-    const credentialSubject = vc.credentialSubject
-    if (!credentialSubject || typeof credentialSubject !== 'object') {
-      return ''
-    }
-
-    if (credentialSubject.employeeName) {
-      return `Performance Review: ${credentialSubject.employeeJobTitle || 'Unknown Position'}`
-    }
-    if (credentialSubject.volunteerWork) {
-      return `Volunteer: ${credentialSubject.volunteerWork}`
-    }
-    if (credentialSubject.role) {
-      return `Employment: ${credentialSubject.role}`
-    }
-    if (credentialSubject.credentialName) {
-      return credentialSubject.credentialName
-    }
-
-    if (credentialSubject.skill?.[0]?.name) {
-      return credentialSubject.skill[0].name
-    }
-    if (credentialSubject.name) {
-      return credentialSubject.name
-    }
-
-    if (
-      Array.isArray(credentialSubject.achievement) &&
-      credentialSubject.achievement.length > 0 &&
-      credentialSubject.achievement[0]?.name
-    ) {
-      return credentialSubject.achievement[0].name
-    }
-
-    return ''
-  } catch (error) {
-    console.error('Error getting credential name:', error)
-    return ''
-  }
-}
 
 const getValidVCs = (vcs: any[]): any[] => {
   if (!Array.isArray(vcs)) return []

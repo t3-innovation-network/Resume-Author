@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { checkmarkBlueSVG, checkmarkgraySVG } from '../../assets/svgs'
 import { useLocation } from 'react-router-dom'
 import { fetchVCs } from '../../redux/slices/vc'
+import { getCredentialName } from '../../utils/credentialUtils'
 import { AppDispatch, RootState } from '../../redux/store'
 import MediaUploadSection from '../../components/NewFileUpload/MediaUploadSection'
 import useGoogleDrive, { DriveFileMeta } from '../../hooks/useGoogleDrive'
@@ -38,9 +39,7 @@ const RightSidebar = ({
   const location = useLocation()
   const { accessToken, isAuthenticated } = useSelector((state: RootState) => state.auth)
   const dispatch: AppDispatch = useDispatch()
-  const { vcs, status: vcStatus, error: vcError } = useSelector(
-    (state: any) => state.vcReducer
-  )
+  const { vcs, status: vcStatus } = useSelector((state: any) => state.vcReducer)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const resume = useSelector((state: RootState) => state.resume?.resume)
 
@@ -73,37 +72,8 @@ const RightSidebar = ({
     }
   }, [accessToken, reloadRemoteFiles])
 
-  useEffect(() => {
-    if (remoteFiles.length > 0) {
-      console.log('Access token debug:', {
-        hasAccessToken: !!accessToken,
-        accessTokenLength: accessToken?.length,
-        accessTokenPreview: accessToken ? accessToken.substring(0, 20) + '...' : 'null',
-        remoteFilesCount: remoteFiles.length,
-        sampleFile: remoteFiles[0]
-          ? {
-              id: remoteFiles[0].id,
-              name: remoteFiles[0].name,
-              mimeType: remoteFiles[0].mimeType,
-              hasThumbnailLink: !!remoteFiles[0].thumbnailLink
-            }
-          : null
-      })
-    }
-  }, [remoteFiles, accessToken])
-
-  const getDriveUrl = (id: string) => {
-    const url =
-      `https://drive.google.com/uc?export=view&id=${id}` ||
-      `https://drive.google.com/thumbnail?authuser=0&sz=w320&id=${id}`
-
-    console.log('getDriveUrl called:', {
-      id,
-      generatedUrl: url
-    })
-
-    return url
-  }
+  const getDriveUrl = (id: string) =>
+    `https://drive.google.com/uc?export=view&id=${id}`
 
   const getAllFiles = useCallback((): FileItem[] => {
     const localFiles = files
@@ -172,68 +142,6 @@ const RightSidebar = ({
     }
   }
 
-  const getCredentialName = (vc: any): string => {
-    try {
-      if (!vc || typeof vc !== 'object') {
-        return ''
-      }
-
-      const credentialSubject = vc.credentialSubject
-      if (!credentialSubject || typeof credentialSubject !== 'object') {
-        return ''
-      }
-
-      if (credentialSubject.employeeName) {
-        return `Performance Review: ${credentialSubject.employeeJobTitle || 'Unknown Position'}`
-      }
-      if (credentialSubject.volunteerWork) {
-        return `Volunteer: ${credentialSubject.volunteerWork}`
-      }
-      if (credentialSubject.role) {
-        return `Employment: ${credentialSubject.role}`
-      }
-      if (credentialSubject.credentialName) {
-        return credentialSubject.credentialName
-      }
-
-      // LinkedCreds SkillClaimCredential (e.g. "test resume author")
-      if (credentialSubject.skill?.[0]?.name) {
-        return credentialSubject.skill[0].name
-      }
-      if (credentialSubject.name) {
-        return credentialSubject.name
-      }
-
-      if (
-        Array.isArray(credentialSubject.achievement) &&
-        credentialSubject.achievement.length > 0 &&
-        credentialSubject.achievement[0]?.name
-      ) {
-        return credentialSubject.achievement[0].name
-      }
-
-      // Handle OpenBadge format where achievement is an object, not array
-      if (
-        credentialSubject.achievement &&
-        typeof credentialSubject.achievement === 'object' &&
-        !Array.isArray(credentialSubject.achievement) &&
-        credentialSubject.achievement.name
-      ) {
-        return credentialSubject.achievement.name
-      }
-
-      // Check for credential name at root level (OpenBadge/external format)
-      if (vc.name && typeof vc.name === 'string') {
-        return vc.name
-      }
-
-      return ''
-    } catch (error) {
-      console.error('Error getting credential name:', error)
-      return ''
-    }
-  }
-
   const getValidVCs = (vcs: any[]): any[] => {
     if (!Array.isArray(vcs)) return []
 
@@ -247,8 +155,8 @@ const RightSidebar = ({
           return false
         }
 
-        const credentialName = getCredentialName(vc)
-        if (!credentialName || credentialName.trim() === '') {
+        const credentialName = getCredentialName(vc) || ''
+        if (!credentialName.trim()) {
           return false
         }
 
@@ -307,27 +215,18 @@ const RightSidebar = ({
     return false
   }
 
-  const renderCredentialContent = (vc: any) => {
-    const credentialName = getCredentialName(vc)
-
-    return (
-      <Typography
-        sx={{
-          fontSize: 16,
-          fontWeight: 500,
-          color: '#2563EB',
-          textDecoration: 'underline',
-          fontFamily: 'Nunito Sans',
-          cursor: 'pointer'
-        }}
-        onClick={() => {
-          /* No action needed - just for visual feedback */
-        }}
-      >
-        {credentialName}
-      </Typography>
-    )
-  }
+  const renderCredentialContent = (vc: any) => (
+    <Typography
+      sx={{
+        fontSize: 16,
+        fontWeight: 500,
+        color: '#2563EB',
+        fontFamily: 'Nunito Sans'
+      }}
+    >
+      {getCredentialName(vc) || 'Credential'}
+    </Typography>
+  )
 
   const renderCredentialsContent = () => {
     if (isLoading) {
@@ -365,18 +264,11 @@ const RightSidebar = ({
       )
     }
 
-    const loadedCount = Array.isArray(vcs) ? vcs.length : 0
     let message = 'No credentials found.'
-    if (vcStatus === 'failed' && vcError) {
-      message = `Could not load credentials: ${vcError}`
-    } else if (loadedCount > 0) {
-      message =
-        `${loadedCount} credential(s) loaded from Drive but none could be displayed. Try Import Credentials from Google Drive.`
+    if (vcStatus === 'failed') {
+      message = 'Failed to load credentials.'
     } else if (!accessToken) {
-      message = 'Sign in with Google to load credentials from your wallet.'
-    } else {
-      message +=
-        ' Credentials are stored per Google OAuth app — use the same Client ID as LinkedCreds in .env.'
+      message = 'Sign in with Google to load credentials.'
     }
 
     return (

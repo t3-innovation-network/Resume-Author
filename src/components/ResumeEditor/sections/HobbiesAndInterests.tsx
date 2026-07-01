@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   Box,
   TextField,
@@ -16,6 +16,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '../../../redux/store'
 import { updateSection } from '../../../redux/slices/resume'
 import TextEditor from '../../TextEditor/Texteditor'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 
 interface HobbiesAndInterestsProps {
   onAddFiles?: (itemIndex?: number) => void
@@ -37,39 +38,29 @@ export default function HobbiesAndInterests({
   const [hobbies, setHobbies] = useState<string[]>([])
   const [newHobby, setNewHobby] = useState('')
   const [newHobbyDescription, setNewHobbyDescription] = useState('')
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const dispatchHobbiesUpdate = useCallback(
+    (updatedHobbies: string[]) => {
+      dispatch(
+        updateSection({
+          sectionId: 'hobbiesAndInterests',
+          content: updatedHobbies
+        })
+      )
+    },
+    [dispatch]
+  )
+
+  const { scheduleUpdate: updateRedux } = useDebouncedSectionUpdate(
+    dispatchHobbiesUpdate,
+    500
+  )
 
   useEffect(() => {
     if (resume?.hobbiesAndInterests && resume.hobbiesAndInterests.length > 0) {
       setHobbies(resume.hobbiesAndInterests)
     }
   }, [resume])
-
-  const updateRedux = useCallback(
-    (updatedHobbies: string[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'hobbiesAndInterests',
-            content: updatedHobbies
-          })
-        )
-      }, 500)
-    },
-    [dispatch]
-  )
-
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const handleAddHobby = () => {
     if (!newHobby.trim()) return

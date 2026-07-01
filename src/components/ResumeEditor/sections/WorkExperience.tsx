@@ -24,6 +24,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CredentialOverlay from '../../CredentialsOverlay'
 import VerifiedCredentialsList from '../../common/VerifiedCredentialsList'
@@ -100,7 +101,6 @@ export default function WorkExperience({
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
   const vcs = useSelector((state: any) => state.vcReducer.vcs)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -139,30 +139,20 @@ export default function WorkExperience({
   // Local toggle to show/hide duration vs start/end date
   const [useDuration, setUseDuration] = useState<boolean[]>([true])
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchExperienceUpdate = useCallback(
     (items: WorkExperienceItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        console.log(
-          'Debounced Redux update with items:',
-          items.map(item => ({
-            id: item.id,
-            title: item.title,
-            hasCredentials: item.selectedCredentials.length > 0
-          }))
-        )
-        dispatch(
-          updateSection({
-            sectionId: 'experience',
-            content: { items }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'experience',
+          content: { items }
+        })
+      )
     },
     [dispatch]
   )
+
+  const { scheduleUpdate: debouncedReduxUpdate, cancelPending } =
+    useDebouncedSectionUpdate(dispatchExperienceUpdate, 500)
 
   const calculateDuration = (
     startDate: string,
@@ -207,25 +197,13 @@ export default function WorkExperience({
           setWorkExperiences(prev => {
             const updated = [...prev]
             updated[i] = { ...updated[i], duration: calc }
+            debouncedReduxUpdate(updated)
             return updated
           })
-          if (reduxUpdateTimeoutRef.current) clearTimeout(reduxUpdateTimeoutRef.current)
-          reduxUpdateTimeoutRef.current = setTimeout(() => {
-            dispatch(
-              updateSection({
-                sectionId: 'experience',
-                content: {
-                  items: workExperiences.map((item, idx) =>
-                    idx === i ? { ...item, duration: calc } : item
-                  )
-                }
-              })
-            )
-          }, 1000)
         }
       }
     })
-  }, [dateChangeString, dispatch, workExperiences, useDuration])
+  }, [dateChangeString, workExperiences, useDuration, debouncedReduxUpdate])
 
   useEffect(() => {
     // Skip updates while credentials overlay is open to prevent data shifting
@@ -334,13 +312,8 @@ export default function WorkExperience({
         }
       }
     }
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resume, showCredentialsOverlay, activeSectionIndex]) // Added showCredentialsOverlay and activeSectionIndex to dependencies
+  }, [resume, showCredentialsOverlay, activeSectionIndex])
 
   const handleWorkExperienceChange = useCallback(
     (index: number, field: string, val: any) => {
@@ -371,19 +344,11 @@ export default function WorkExperience({
       setWorkExperiences(prev => {
         const updated = [...prev]
         updated[index] = { ...updated[index], description: value }
-        if (reduxUpdateTimeoutRef.current) clearTimeout(reduxUpdateTimeoutRef.current)
-        reduxUpdateTimeoutRef.current = setTimeout(() => {
-          dispatch(
-            updateSection({
-              sectionId: 'experience',
-              content: { items: updated }
-            })
-          )
-        }, 1000)
+        debouncedReduxUpdate(updated)
         return updated
       })
     },
-    [dispatch]
+    [debouncedReduxUpdate]
   )
 
   const handleAddAnotherItem = useCallback(() => {
@@ -493,10 +458,7 @@ export default function WorkExperience({
         vcs
       ) {
         // Cancel any pending debounced updates before credential attachment
-        if (reduxUpdateTimeoutRef.current) {
-          clearTimeout(reduxUpdateTimeoutRef.current)
-          reduxUpdateTimeoutRef.current = null
-        }
+        cancelPending()
         const selectedCredentials = selectedCredentialIDs.map(id => {
           // The id from CredentialOverlay should be the file ID
           const credential = vcs?.find((c: any) => {

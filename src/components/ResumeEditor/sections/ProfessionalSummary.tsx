@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Box, Typography } from '@mui/material'
 import TextEditor from '../../TextEditor/Texteditor'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 
 interface ProfessionalSummaryProps {
   onAddFiles?: () => void
@@ -22,46 +23,34 @@ export default function ProfessionalSummary({
 }: Readonly<ProfessionalSummaryProps>) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const [description, setDescription] = useState('')
 
-  // ✅ Load existing summary from Redux if available
-  useEffect(() => {
-    if (resume?.summary !== undefined) {
-      // Prevent unnecessary state updates
-      if (resume.summary !== description) {
-        setDescription(resume.summary || '')
-      }
-    }
-  }, [resume?.summary]) // Only depend on resume.summary, not description
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  const handleDescriptionChange = (val: string) => {
-    // Always update local state immediately for responsiveness
-    setDescription(val)
-
-    // Debounce Redux updates
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current)
-    }
-
-    updateTimeoutRef.current = setTimeout(() => {
+  const dispatchSummaryUpdate = useCallback(
+    (val: string) => {
       dispatch(
         updateSection({
           sectionId: 'summary',
           content: val
         })
       )
-    }, 500)
+    },
+    [dispatch]
+  )
+
+  const { scheduleUpdate } = useDebouncedSectionUpdate(dispatchSummaryUpdate, 500)
+
+  useEffect(() => {
+    if (resume?.summary !== undefined) {
+      if (resume.summary !== description) {
+        setDescription(resume.summary || '')
+      }
+    }
+  }, [resume?.summary])
+
+  const handleDescriptionChange = (val: string) => {
+    setDescription(val)
+    scheduleUpdate(val)
   }
 
   return (

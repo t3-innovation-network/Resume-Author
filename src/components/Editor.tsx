@@ -27,7 +27,7 @@ import LeftSidebar from './ResumeEditor/LeftSidebar'
 import RightSidebar from './ResumeEditor/RightSidebar'
 import Section from './ResumeEditor/Section'
 import { useSelector, useDispatch } from 'react-redux'
-import { RootState, AppDispatch } from '../redux/store'
+import { RootState, AppDispatch, store } from '../redux/store'
 import { SVGEditName } from '../assets/svgs'
 import useGoogleDrive from '../hooks/useGoogleDrive' // , { DriveFileMeta }
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -44,6 +44,24 @@ import { prepareResumeForVC } from '../tools/resumeAdapter'
 import FileSelectorOverlay from './NewFileUpload/FileSelectorOverlay'
 import { FileItem } from './NewFileUpload/FileList'
 import { fetchUserResumes } from '../redux/slices/myresumes'
+import { flushAllSectionUpdates } from '../utils/sectionUpdateFlush'
+import {
+  computeResumeHash,
+  storeResumeBaselineHash,
+  getResumeBaselineHash,
+  clearResumeBaselineHash,
+  resumeHasEditorContent
+} from '../utils/resumeHash'
+import {
+  consumeStartNewResume,
+  markEditorPreviewSession,
+  matchesEditorPreviewSession,
+  clearEditorPreviewSession,
+  isPreviewRoute,
+  markEditorActiveResume,
+  matchesEditorActiveResume
+} from '../utils/newResumeNavigation'
+import { initialState } from '../initialResumeState'
 
 const COLORS = {
   primary: '#3A35A2',
@@ -78,24 +96,6 @@ const BorderLinearProgress = styled(LinearProgress)(({ theme }) => ({
     })
   }
 }))
-
-// Helper function to compute a simple hash from the resume's critical fields
-const computeResumeHash = (resume: any): string => {
-  if (!resume) return ''
-
-  // Extract fields that we want to monitor for changes
-  const fieldsToCheck = {
-    name: resume.name ?? '',
-    contact: resume.contact ?? {},
-    summary: resume.summary ?? '',
-    experience: resume.experience ?? {},
-    education: resume.education ?? {},
-    affiliations: resume.affiliations ?? {},
-    skills: resume.skills ?? {}
-  }
-
-  return JSON.stringify(fieldsToCheck)
-}
 
 // FINAL PATCH: Guarantee credentialLink is a JSON string if fullCredential is present in the signed object (all sections)
 function forceCredentialJsonString(sectionArr: any[]): any[] {
@@ -185,6 +185,7 @@ const ResumeEditor: React.FC = () => {
 
   const activeSection = useSelector((state: RootState) => state.resume.activeSection)
   const resume = useSelector((state: RootState) => state?.resume.resume)
+  const resumeIsDirty = useSelector((state: RootState) => state.resume.isDirty)
   const { instances, isInitialized } = useGoogleDrive()
   const { accessToken } = useSelector((state: RootState) => state.auth)
   const refreshToken = getLocalStorage('refresh_token')
@@ -210,29 +211,81 @@ const ResumeEditor: React.FC = () => {
   const closeLeftDrawer = useCallback(() => setIsLeftDrawerOpen(false), [])
   const closeRightDrawer = useCallback(() => setIsRightDrawerOpen(false), [])
 
-  // Handle creating a new resume (clear form data)
+  const syncResumeNameFromData = useCallback((resumeData: { name?: string; contact?: { fullName?: string } }) => {
+    try {
+      const name =
+        resumeData.contact?.fullName ?? resumeData.name ?? 'Untitled Resume'
+      setResumeName(name)
+    } catch {
+      setResumeName('Untitled Resume')
+    }
+  }, [])
+
+  // Only reset when the user explicitly starts a new resume (not when returning from preview)
   useEffect(() => {
     if (!resumeId && isInitialized) {
-      // Reset the entire Redux state to initial state
-      dispatch(resetToInitialState())
-      sessionStorage.removeItem('lastEditedResumeId')
+      const startNewFromNavigation =
+        (location.state as { startNewResume?: boolean } | null)?.startNewResume ===
+          true || consumeStartNewResume()
 
-      // Clear any localStorage drafts that might interfere
-      const keys = Object.keys(localStorage)
-      const draftKeys = keys.filter(key => key.startsWith('resume_draft_'))
-      draftKeys.forEach(key => {
-        localStorage.removeItem(key)
-      })
+      if (startNewFromNavigation) {
+        dispatch(resetToInitialState())
+        sessionStorage.removeItem('lastEditedResumeId')
+        clearEditorPreviewSession()
+        clearResumeBaselineHash()
 
-      originalResumeRef.current = null
-      setIsDirty(false)
-      setResumeName('Untitled')
+        const keys = Object.keys(localStorage)
+        keys
+          .filter(key => key.startsWith('resume_draft_'))
+          .forEach(key => localStorage.removeItem(key))
+
+        originalResumeRef.current = null
+        setIsDirty(false)
+        setResumeName('Untitled')
+
+        const emptyHash = computeResumeHash(initialState.resume)
+        storeResumeBaselineHash(emptyHash)
+        originalResumeRef.current = emptyHash
+
+        window.history.replaceState({}, '', '/resume/new')
+      }
     }
-  }, [resumeId, isInitialized, dispatch])
+  }, [resumeId, isInitialized, dispatch, location.state])
+
+  // Restore dirty baseline from session when the editor remounts (e.g. back from preview)
+  useEffect(() => {
+    const baseline = getResumeBaselineHash()
+    if (baseline) {
+      originalResumeRef.current = baseline
+    }
+  }, [])
+
+  // First visit to an unsaved new resume without a stored baseline
+  useEffect(() => {
+    if (!resume || resumeId || getResumeBaselineHash()) return
+    const hash = computeResumeHash(resume)
+    storeResumeBaselineHash(hash)
+    originalResumeRef.current = hash
+  }, [resume, resumeId])
 
   // Load resume data from Google Drive
   useEffect(() => {
     if (resumeId && isInitialized) {
+      const resumeFromSession = store.getState().resume.resume
+
+      const canUseReduxWithoutFetch =
+        resumeFromSession &&
+        resumeHasEditorContent(resumeFromSession) &&
+        (matchesEditorPreviewSession(resumeId) ||
+          matchesEditorActiveResume(resumeId))
+
+      if (canUseReduxWithoutFetch) {
+        syncResumeNameFromData(resumeFromSession)
+        return
+      }
+
+      clearEditorPreviewSession()
+
       const fetchResumeData = async () => {
         setIsLoading(true)
 
@@ -249,17 +302,12 @@ const ResumeEditor: React.FC = () => {
               // Dispatch to Redux
               dispatch(setSelectedResume(resumeData))
 
-              // Store the original resume hash for dirty state comparison
-              originalResumeRef.current = computeResumeHash(resumeData)
+              const hash = computeResumeHash(resumeData)
+              storeResumeBaselineHash(hash)
+              originalResumeRef.current = hash
+              markEditorActiveResume(resumeId)
 
-              // Try to set resume name if we can find it
-              try {
-                const name =
-                  resumeData.contact?.fullName ?? resumeData.name ?? 'Imported Resume'
-                setResumeName(name)
-              } catch (e) {
-                setResumeName('Imported Resume')
-              }
+              syncResumeNameFromData(resumeData)
 
               console.log(
                 'Resume loaded successfully from localStorage (temporary import)'
@@ -279,17 +327,12 @@ const ResumeEditor: React.FC = () => {
               // Dispatch to Redux
               dispatch(setSelectedResume(resumeData))
 
-              // Store the original resume hash for dirty state comparison
-              originalResumeRef.current = computeResumeHash(resumeData)
+              const hash = computeResumeHash(resumeData)
+              storeResumeBaselineHash(hash)
+              originalResumeRef.current = hash
+              markEditorActiveResume(resumeId)
 
-              // Try to set resume name if we can find it
-              try {
-                const name =
-                  resumeData.contact?.fullName ?? resumeData.name ?? 'Untitled Resume'
-                setResumeName(name)
-              } catch (e) {
-                setResumeName('Untitled Resume')
-              }
+              syncResumeNameFromData(resumeData)
             } else {
               console.error('Retrieved resume data is empty')
             }
@@ -303,22 +346,22 @@ const ResumeEditor: React.FC = () => {
 
       fetchResumeData()
     }
-  }, [resumeId, isInitialized, dispatch, instances.storage, navigate])
+  }, [resumeId, isInitialized, dispatch, instances.storage, navigate, syncResumeNameFromData])
 
-  // Check if resume has been modified using the optimized hash comparison
+  // Check if resume has been modified using hash comparison and Redux dirty flag
   useEffect(() => {
-    if (resume && originalResumeRef.current) {
-      const newDirtyState = currentResumeHash !== originalResumeRef.current
-      // Only update if state actually changes to prevent unnecessary re-renders
-      setIsDirty(prev => {
-        if (prev !== newDirtyState) {
-          return newDirtyState
-        }
-        return prev
-      })
+    if (resumeIsDirty) {
+      setIsDirty(true)
+      return
+    }
+
+    const baseline = getResumeBaselineHash() ?? originalResumeRef.current
+    if (resume && baseline) {
+      const newDirtyState = currentResumeHash !== baseline
+      setIsDirty(prev => (prev !== newDirtyState ? newDirtyState : prev))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentResumeHash]) // NEVER include resume here - it causes infinite loops!
+  }, [currentResumeHash, resumeIsDirty])
 
   // Handle browser's built-in beforeunload dialog for page reloads
   useEffect(() => {
@@ -357,10 +400,10 @@ const ResumeEditor: React.FC = () => {
     }
   }, [resumeId, navigate])
 
-  // Handle navigation with exit confirmation
+  // Handle navigation with exit confirmation (preview is in-session — no save required)
   const handleNavigate = (path: string) => {
-    if (isDirty) {
-      // Only show dialog if there are unsaved changes
+    flushAllSectionUpdates()
+    if (isDirty && !isPreviewRoute(path)) {
       setShowExitDialog(true)
       setExitDestination(path)
     } else {
@@ -422,8 +465,11 @@ const ResumeEditor: React.FC = () => {
       ) {
         // Check if we have unsaved changes
         if (isDirty) {
-          e.preventDefault()
           const destination = link?.getAttribute('href') ?? '/'
+          if (isPreviewRoute(destination)) {
+            return
+          }
+          e.preventDefault()
           setExitDestination(destination)
           setShowExitDialog(true)
         }
@@ -454,22 +500,35 @@ const ResumeEditor: React.FC = () => {
   const handleSaveAndExit = async () => {
     try {
       setIsDraftSaving(true)
+      flushAllSectionUpdates()
+      const currentResume = store.getState().resume.resume
 
-      if (resume && resumeId && instances?.resumeManager) {
-        // Save the updated resume to Google Drive
-        await instances.resumeManager.saveResume({
-          resume: resume,
+      if (exitDestination && isPreviewRoute(exitDestination)) {
+        setShowExitDialog(false)
+        navigate(exitDestination)
+        setExitDestination(null)
+        return
+      }
+
+      if (currentResume && instances?.resumeManager) {
+        const saveData: {
+          resume: typeof currentResume
           type: 'unsigned'
-        })
+          id?: string
+        } = {
+          resume: currentResume,
+          type: 'unsigned',
+          ...(resumeId && !resumeId.startsWith('temp-') ? { id: resumeId } : {})
+        }
 
-        // Update our original reference so it's no longer dirty
-        originalResumeRef.current = computeResumeHash(resume)
+        await instances.resumeManager.saveResume(saveData)
+
+        originalResumeRef.current = computeResumeHash(currentResume)
+        storeResumeBaselineHash(originalResumeRef.current)
         setIsDirty(false)
 
-        // Close dialog and navigate
         setShowExitDialog(false)
 
-        // Navigate to destination after brief delay
         setTimeout(() => {
           if (exitDestination) {
             navigate(exitDestination)
@@ -485,8 +544,10 @@ const ResumeEditor: React.FC = () => {
       console.error('Error saving resume before exit:', error)
     } finally {
       setIsDraftSaving(false)
-      setShowExitDialog(false)
-      setExitDestination(null)
+      if (exitDestination && !isPreviewRoute(exitDestination)) {
+        setShowExitDialog(false)
+        setExitDestination(null)
+      }
     }
   }
 
@@ -652,18 +713,21 @@ const ResumeEditor: React.FC = () => {
   }
 
   const handlePreview = () => {
-    // If we have a resumeId, pass it to the preview page
-    if (resumeId) {
-      handleNavigate(`/resume/view?id=${resumeId}`)
-    } else {
-      handleNavigate('/resume/view')
-    }
+    flushAllSectionUpdates()
+    markEditorPreviewSession(resumeId)
+    navigate(resumeId ? `/resume/view?id=${resumeId}` : '/resume/view')
   }
 
   const handleSaveDraft = async () => {
     try {
       setIsDraftSaving(true)
-      const preparedResume = await prepareResumeForVC(resume, sectionEvidence, allFiles)
+      flushAllSectionUpdates()
+      const currentResume = store.getState().resume.resume
+      const preparedResume = await prepareResumeForVC(
+        currentResume,
+        sectionEvidence,
+        allFiles
+      )
       console.log('Saving draft with evidence:', {
         sectionEvidence,
         evidenceInPreparedResume: preparedResume?.evidence
@@ -671,7 +735,7 @@ const ResumeEditor: React.FC = () => {
 
       // Save to Google Drive
       // IMPORTANT: Include the resumeId if we have one to update the existing file
-      const resumeToSave = preparedResume || resume
+      const resumeToSave = preparedResume || currentResume
 
       // Log whether we're updating or creating
       if (resumeId && !resumeId.startsWith('temp-')) {
@@ -702,12 +766,13 @@ const ResumeEditor: React.FC = () => {
         dispatch(setSelectedResume(resumeDataToStore))
 
         const newHash = computeResumeHash(resumeDataToStore)
-        console.log('Updating resume hash after save', {
-          oldHash: originalResumeRef.current?.substring(0, 20),
-          newHash: newHash.substring(0, 20)
-        })
+        storeResumeBaselineHash(newHash)
         originalResumeRef.current = newHash
         setIsDirty(false)
+
+        if (savedResume.id) {
+          markEditorActiveResume(savedResume.id)
+        }
 
         // If this was a temporary import OR the saved resume has a different ID, update the URL
         if (
@@ -749,6 +814,9 @@ const ResumeEditor: React.FC = () => {
     }, 3000)
 
     try {
+      flushAllSectionUpdates()
+      const currentResume = store.getState().resume.resume
+
       // Generate key pair
       const keyPair = await instances.resumeVC.generateKeyPair()
       if (!keyPair) {
@@ -763,14 +831,18 @@ const ResumeEditor: React.FC = () => {
         throw new Error('Failed to create DID document')
       }
 
-      if (!resume) {
+      if (!currentResume) {
         console.error('Resume is null, cannot prepare for VC')
         return
       }
 
       // Prepare resume for signing
 
-      const preparedResume = await prepareResumeForVC(resume, sectionEvidence, allFiles)
+      const preparedResume = await prepareResumeForVC(
+        currentResume,
+        sectionEvidence,
+        allFiles
+      )
 
       // PATCH: Ensure processed employmentHistory is used in credentialSubject
       if (
@@ -892,7 +964,8 @@ const ResumeEditor: React.FC = () => {
       })
 
       // Update our reference to mark as not dirty
-      originalResumeRef.current = computeResumeHash(resume)
+      originalResumeRef.current = computeResumeHash(currentResume)
+      storeResumeBaselineHash(originalResumeRef.current)
       setIsDirty(false)
 
       // If this was a temporary import, clean up localStorage and update URL

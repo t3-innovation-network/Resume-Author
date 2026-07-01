@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../redux/store'
 import { useEffect, useCallback, useState, useRef } from 'react'
 import { fetchUserResumes } from '../redux/slices/myresumes'
+import { markStartNewResume } from '../utils/newResumeNavigation'
 import useDraftResume from '../hooks/useDraftResume'
 import { logout } from '../tools/auth'
 import AuthErrorDisplay from './common/AuthErrorDisplay'
@@ -157,6 +158,8 @@ const ResumeScreen: React.FC = () => {
                   display: 'block'
                 }}
                 to='/resume/new'
+                state={{ startNewResume: true }}
+                onClick={() => markStartNewResume()}
               >
                 Create new resume
               </Link>

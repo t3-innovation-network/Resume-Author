@@ -27,6 +27,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CloseIcon from '@mui/icons-material/Close'
 import CredentialOverlay from '../../CredentialsOverlay'
@@ -141,7 +142,6 @@ export default function Education({
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
   const vcs = useSelector((state: any) => state.vcReducer.vcs)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -175,21 +175,21 @@ export default function Education({
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({ 0: true })
 
   const [useDuration, setUseDuration] = useState<boolean[]>([false])
-  const debouncedReduxUpdate = useCallback(
+  const dispatchEducationUpdate = useCallback(
     (items: EducationItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'education',
-            content: { items }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'education',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchEducationUpdate,
+    500
   )
 
   const calculateDuration = useCallback(
@@ -268,11 +268,6 @@ export default function Education({
         }
       }
     }
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
 
@@ -308,22 +303,11 @@ export default function Education({
       setEducations(prev => {
         const updated = [...prev]
         updated[index] = { ...updated[index], description: value }
-
-        if (reduxUpdateTimeoutRef.current) {
-          clearTimeout(reduxUpdateTimeoutRef.current)
-        }
-        reduxUpdateTimeoutRef.current = setTimeout(() => {
-          dispatch(
-            updateSection({
-              sectionId: 'education',
-              content: { items: updated }
-            })
-          )
-        }, 1000)
+        debouncedReduxUpdate(updated)
         return updated
       })
     },
-    [dispatch]
+    [debouncedReduxUpdate]
   )
 
   const handleAddAnotherItem = useCallback(() => {

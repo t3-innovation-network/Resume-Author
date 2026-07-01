@@ -25,7 +25,9 @@ import html2pdf from 'html2pdf.js'
 import { useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { setSelectedResume } from '../redux/slices/resume'
-import { AppDispatch, RootState } from '../redux/store'
+import { AppDispatch, RootState, store } from '../redux/store'
+import { matchesEditorPreviewSession } from '../utils/newResumeNavigation'
+import { resumeHasEditorContent } from '../utils/resumeHash'
 
 const PreviewPage = () => {
   const [isDraftSaving, setIsDraftSaving] = useState(false)
@@ -41,29 +43,58 @@ const PreviewPage = () => {
   const location = useLocation()
   const dispatch = useDispatch<AppDispatch>()
 
-  // Get the resume from Redux state first
   const reduxResume = useSelector((state: RootState) => state.resume?.resume)
 
-  // Get resumeId from URL parameters
   const queryParams = new URLSearchParams(location.search)
   const resumeId = queryParams.get('id')
 
-  // Initialize state based on whether we have Redux data or need to fetch
   const [resumeData, setResumeData] = useState<any>(reduxResume)
   const [isLoading, setIsLoading] = useState(!reduxResume && !!resumeId)
-  const hasLoadedFromDrive = useRef(false)
+  const loadedForResumeId = useRef<string | null>(null)
 
-  // Update local state when Redux state changes (only if we haven't loaded from Drive)
   useEffect(() => {
-    if (reduxResume && !hasLoadedFromDrive.current) {
+    if (reduxResume && loadedForResumeId.current === (resumeId ?? 'unsaved')) {
       setResumeData(reduxResume)
     }
-  }, [reduxResume])
+  }, [reduxResume, resumeId])
 
   useEffect(() => {
-    const fetchResumeFromDrive = async () => {
-      if (!resumeId) return
+    const resumeIdKey = resumeId ?? 'unsaved'
 
+    const applyReduxResume = (current: unknown) => {
+      if (!current || !resumeHasEditorContent(current)) return false
+      setResumeData(current)
+      setIsLoading(false)
+      loadedForResumeId.current = resumeIdKey
+      return true
+    }
+
+    if (!resumeId) {
+      const current = store.getState().resume.resume
+      if (current) {
+        setResumeData(current)
+      }
+      setIsLoading(false)
+      loadedForResumeId.current = resumeIdKey
+      return
+    }
+
+    if (loadedForResumeId.current === resumeIdKey) {
+      return
+    }
+
+    const current = store.getState().resume.resume
+    const isDirty = store.getState().resume.isDirty
+
+    if (matchesEditorPreviewSession(resumeId) || isDirty) {
+      if (applyReduxResume(current)) {
+        return
+      }
+    }
+
+    loadedForResumeId.current = null
+
+    const fetchResumeFromDrive = async () => {
       try {
         const accessToken = getLocalStorage('auth')
         if (!accessToken) throw new Error('No authentication token found')
@@ -75,12 +106,11 @@ const PreviewPage = () => {
         if (fileData?.data ?? fileData) {
           const data = fileData.data ?? fileData
           setResumeData(data)
-          hasLoadedFromDrive.current = true
-          // Also update Redux state so Sign and Save has access to the resume data
+          loadedForResumeId.current = resumeIdKey
           dispatch(setSelectedResume(data))
         } else {
           setResumeData(fileData)
-          hasLoadedFromDrive.current = true
+          loadedForResumeId.current = resumeIdKey
           dispatch(setSelectedResume(fileData))
         }
         setIsLoading(false)
@@ -140,7 +170,6 @@ const PreviewPage = () => {
       custom: { resumeData: JSON.stringify(resumeData) }
     }
 
-    // Temporarily reset zoom for export to avoid scaled capture
     const prevZoom = zoom
     setZoom(1)
     try {
@@ -181,8 +210,6 @@ const PreviewPage = () => {
   }
 
   const fitToWidthZoom = useMemo(() => {
-    // Approximate: page width 210mm; container likely full width; we'll scale down on small screens
-    // Leave as 1 on desktop, clamp to 0.9 on smaller; user can tap Fit control as needed
     return 0.9
   }, [])
 
@@ -243,7 +270,6 @@ const PreviewPage = () => {
         resumeId={resumeId}
       />
 
-      {/* Controls: Zoom and Export */}
       <Box
         sx={{
           position: 'fixed',

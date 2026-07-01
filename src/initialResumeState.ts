@@ -67,7 +67,7 @@ export const initialState: ResumeState = {
   activeSection: null,
   highlightedText: null,
   pendingVerifications: [],
-  isDirty: true,
+  isDirty: false,
   sectionVisibility: {
     summary: true,
     contact: true,

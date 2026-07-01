@@ -26,6 +26,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CloseIcon from '@mui/icons-material/Close'
 import CredentialOverlay from '../../CredentialsOverlay'
@@ -98,7 +99,6 @@ export default function VolunteerWork({
 }: Readonly<VolunteerWorkProps>) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -159,21 +159,21 @@ export default function VolunteerWork({
     return durationString || 'Less than a month'
   }
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchVolunteerUpdate = useCallback(
     (items: VolunteerWorkItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'volunteerWork',
-            content: { items }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'volunteerWork',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchVolunteerUpdate,
+    500
   )
 
   const dateChangeString = volunteerWorks
@@ -193,28 +193,14 @@ export default function VolunteerWork({
             setVolunteerWorks(prev => {
               const updated = [...prev]
               updated[index] = { ...updated[index], duration: calc }
+              debouncedReduxUpdate(updated)
               return updated
             })
-            if (reduxUpdateTimeoutRef.current) {
-              clearTimeout(reduxUpdateTimeoutRef.current)
-            }
-            reduxUpdateTimeoutRef.current = setTimeout(() => {
-              dispatch(
-                updateSection({
-                  sectionId: 'volunteerWork',
-                  content: {
-                    items: volunteerWorks.map((v, i) =>
-                      i === index ? { ...v, duration: calc } : v
-                    )
-                  }
-                })
-              )
-            }, 1000)
           }
         }
       }
     })
-  }, [dateChangeString, dispatch, volunteerWorks, useDuration])
+  }, [dateChangeString, volunteerWorks, useDuration, debouncedReduxUpdate])
 
   useEffect(() => {
     const items =
@@ -255,14 +241,6 @@ export default function VolunteerWork({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
 
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
-
   const handleVolunteerWorkChange = useCallback(
     (index: number, field: string, value: any) => {
       setVolunteerWorks(prev => {
@@ -292,21 +270,11 @@ export default function VolunteerWork({
       setVolunteerWorks(prev => {
         const updated = [...prev]
         updated[index] = { ...updated[index], description: val }
-        if (reduxUpdateTimeoutRef.current) {
-          clearTimeout(reduxUpdateTimeoutRef.current)
-        }
-        reduxUpdateTimeoutRef.current = setTimeout(() => {
-          dispatch(
-            updateSection({
-              sectionId: 'volunteerWork',
-              content: { items: updated }
-            })
-          )
-        }, 1000)
+        debouncedReduxUpdate(updated)
         return updated
       })
     },
-    [dispatch]
+    [debouncedReduxUpdate]
   )
 
   const handleAddAnotherItem = useCallback(() => {

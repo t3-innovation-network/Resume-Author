@@ -23,6 +23,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import VerifiedIcon from '@mui/icons-material/Verified'
 import CloseIcon from '@mui/icons-material/Close'
@@ -84,7 +85,6 @@ export default function CertificationsAndLicenses({
 }: Readonly<CertificationsAndLicensesProps>) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -113,23 +113,21 @@ export default function CertificationsAndLicenses({
     0: true
   })
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchCertificationsUpdate = useCallback(
     (items: CertificationItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'certifications',
-            content: {
-              items: items
-            }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'certifications',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchCertificationsUpdate,
+    500
   )
 
   useEffect(() => {
@@ -171,14 +169,6 @@ export default function CertificationsAndLicenses({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
-
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const handleCertificationChange = useCallback(
     (index: number, field: string, value: any) => {

@@ -1,6 +1,7 @@
 import { Box, Button, Typography } from '@mui/material'
 import { styled } from '@mui/system'
 import { SVGStartFromScratchicon, SVGUpload } from '../assets/svgs'
+import { markStartNewResume } from '../utils/newResumeNavigation'
 
 const InnerContainer = styled(Box)(() => ({
   backgroundColor: '#FFFFFF',
@@ -41,6 +42,7 @@ const StyledButton = styled(Button)({
 
 export default function ImportPage(props: any) {
   const handleFromScratch = () => {
+    markStartNewResume()
     window.location.href = '/resume/new'
   }
   const handleUpload = () => {

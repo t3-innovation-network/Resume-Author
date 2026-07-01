@@ -13,6 +13,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CloseIcon from '@mui/icons-material/Close'
 import CredentialOverlay from '../../CredentialsOverlay'
@@ -93,7 +94,6 @@ export default function SkillsAndAbilities({
 }: Readonly<SkillsAndAbilitiesProps>) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -115,23 +115,21 @@ export default function SkillsAndAbilities({
     0: true
   })
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchSkillsUpdate = useCallback(
     (items: SkillItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'skills',
-            content: {
-              items: items
-            }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'skills',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchSkillsUpdate,
+    500
   )
 
   // Load existing skills from Redux
@@ -164,15 +162,6 @@ export default function SkillsAndAbilities({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const handleSkillChange = useCallback(
     (index: number, field: string, value: string) => {

@@ -15,6 +15,7 @@ import { logout } from '../../tools/auth'
 import { RootState } from '../../redux/store'
 import { clearAuth } from '../../redux/slices/auth'
 import { clearVCs } from '../../redux/slices/vc'
+import { markStartNewResume } from '../../utils/newResumeNavigation'
 interface SidebarProps {
   onToggle: () => void
   isExpanded: boolean
@@ -67,6 +68,7 @@ const Sidebar = ({ onToggle, isExpanded }: SidebarProps) => {
   }
   const handleNewResumeClick = () => {
     setSelectedItem('add')
+    markStartNewResume()
     window.location.href = '/resume/new'
   }
   const handleFAQClick = () => {

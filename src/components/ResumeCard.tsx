@@ -28,6 +28,7 @@ import { getLocalStorage } from '../tools/cookie'
 import Logo from '../assets/blue-logo.png'
 import { useNavigate } from 'react-router-dom'
 import DeleteConfirmationDialog from './DeleteConfirmDialog'
+import { markOpenExistingResume } from '../utils/newResumeNavigation'
 import { useDispatch } from 'react-redux'
 import { AppDispatch } from '../redux/store'
 import { deleteResume, duplicateResume, updateTitle } from '../redux/slices/myresumes'
@@ -218,6 +219,7 @@ const ResumeCard: React.FC<ResumeCardProps> = ({
   const resumeManager = new Resume(storage)
 
   const handleEditTitle = () => {
+    markOpenExistingResume()
     navigate(`/resume/new?id=${id}`)
   }
 
@@ -445,6 +447,7 @@ const ResumeCard: React.FC<ResumeCardProps> = ({
         )
 
         // Navigate to the form editor with the duplicated resume
+        markOpenExistingResume()
         navigate(`/resume/new?id=${file.id}`)
       }
     } catch (error) {
@@ -500,6 +503,7 @@ const ResumeCard: React.FC<ResumeCardProps> = ({
       navigate(`/resume/view/${id}`)
     } else {
       // For drafts or completed but unsigned, navigate to the edit page
+      markOpenExistingResume()
       navigate(`/resume/new?id=${id}`)
     }
   }

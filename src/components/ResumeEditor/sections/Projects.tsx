@@ -19,6 +19,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CloseIcon from '@mui/icons-material/Close'
 import CredentialOverlay from '../../CredentialsOverlay'
@@ -77,7 +78,6 @@ export default function Projects({
 }: Readonly<ProjectsProps>) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -103,23 +103,21 @@ export default function Projects({
     0: true
   })
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchProjectsUpdate = useCallback(
     (items: ProjectItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'projects',
-            content: {
-              items: items
-            }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'projects',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchProjectsUpdate,
+    500
   )
 
   useEffect(() => {
@@ -159,14 +157,6 @@ export default function Projects({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
 
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
-
   const handleProjectChange = useCallback(
     (index: number, field: string, value: any) => {
       setProjects(prevProjects => {
@@ -193,25 +183,12 @@ export default function Projects({
           ...updatedProjects[index],
           description: value
         }
-        if (reduxUpdateTimeoutRef.current) {
-          clearTimeout(reduxUpdateTimeoutRef.current)
-        }
-
-        reduxUpdateTimeoutRef.current = setTimeout(() => {
-          dispatch(
-            updateSection({
-              sectionId: 'projects',
-              content: {
-                items: updatedProjects
-              }
-            })
-          )
-        }, 1000)
+        debouncedReduxUpdate(updatedProjects)
 
         return updatedProjects
       })
     },
-    [dispatch]
+    [debouncedReduxUpdate]
   )
 
   const handleAddAnotherItem = useCallback(() => {

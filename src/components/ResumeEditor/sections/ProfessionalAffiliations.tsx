@@ -25,6 +25,7 @@ import { StyledButton } from './StyledButton'
 import { useDispatch, useSelector } from 'react-redux'
 import { updateSection } from '../../../redux/slices/resume'
 import { RootState } from '../../../redux/store'
+import { useDebouncedSectionUpdate } from '../../../hooks/useDebouncedSectionUpdate'
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import CloseIcon from '@mui/icons-material/Close'
 import CredentialOverlay from '../../CredentialsOverlay'
@@ -97,7 +98,6 @@ export default function ProfessionalAffiliations({
 }: ProfessionalAffiliationsProps) {
   const dispatch = useDispatch()
   const resume = useSelector((state: RootState) => state.resume.resume)
-  const reduxUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const initialLoadRef = useRef(true)
   const theme = useTheme()
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'))
@@ -126,23 +126,21 @@ export default function ProfessionalAffiliations({
   const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({ 0: true })
   const [useDuration, setUseDuration] = useState<boolean[]>([false])
 
-  const debouncedReduxUpdate = useCallback(
+  const dispatchAffiliationsUpdate = useCallback(
     (items: AffiliationItem[]) => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-      reduxUpdateTimeoutRef.current = setTimeout(() => {
-        dispatch(
-          updateSection({
-            sectionId: 'professionalAffiliations',
-            content: {
-              items
-            }
-          })
-        )
-      }, 500)
+      dispatch(
+        updateSection({
+          sectionId: 'professionalAffiliations',
+          content: { items }
+        })
+      )
     },
     [dispatch]
+  )
+
+  const { scheduleUpdate: debouncedReduxUpdate } = useDebouncedSectionUpdate(
+    dispatchAffiliationsUpdate,
+    500
   )
 
   function calculateDuration(startDate: string, endDate: string): string {
@@ -242,11 +240,6 @@ export default function ProfessionalAffiliations({
         }
       }
     }
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resume])
 
@@ -259,37 +252,14 @@ export default function ProfessionalAffiliations({
             setAffiliations(prev => {
               const updated = [...prev]
               updated[index] = { ...updated[index], duration: newDur }
+              debouncedReduxUpdate(updated)
               return updated
             })
-            if (reduxUpdateTimeoutRef.current) {
-              clearTimeout(reduxUpdateTimeoutRef.current)
-            }
-            reduxUpdateTimeoutRef.current = setTimeout(() => {
-              dispatch(
-                updateSection({
-                  sectionId: 'professionalAffiliations',
-                  content: {
-                    items: affiliations.map((aff, i) =>
-                      i === index ? { ...aff, duration: newDur } : aff
-                    )
-                  }
-                })
-              )
-            }, 1000)
           }
         }
       }
     })
-  }, [affiliations, useDuration, dispatch])
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (reduxUpdateTimeoutRef.current) {
-        clearTimeout(reduxUpdateTimeoutRef.current)
-      }
-    }
-  }, [])
+  }, [affiliations, useDuration, debouncedReduxUpdate])
 
   const handleAffiliationChange = useCallback(
     (index: number, field: keyof AffiliationItem, value: any) => {
@@ -316,22 +286,11 @@ export default function ProfessionalAffiliations({
       setAffiliations(prev => {
         const updated = [...prev]
         updated[index] = { ...updated[index], description: value }
-
-        if (reduxUpdateTimeoutRef.current) {
-          clearTimeout(reduxUpdateTimeoutRef.current)
-        }
-        reduxUpdateTimeoutRef.current = setTimeout(() => {
-          dispatch(
-            updateSection({
-              sectionId: 'professionalAffiliations',
-              content: { items: updated }
-            })
-          )
-        }, 1000)
+        debouncedReduxUpdate(updated)
         return updated
       })
     },
-    [dispatch]
+    [debouncedReduxUpdate]
   )
 
   const handleAddAnotherItem = useCallback(() => {

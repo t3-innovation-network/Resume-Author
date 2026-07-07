@@ -1,15 +1,11 @@
 /* eslint-disable testing-library/prefer-screen-queries */
 import { test, expect } from '@playwright/test';
+import { blockGoogleApis, clearAuthStorage, seedAuthStorage } from './helpers/auth';
 
 test.describe('Protected Routes', () => {
   test.describe('Unauthenticated Access', () => {
     test.beforeEach(async ({ page }) => {
-      // Ensure user is logged out by clearing localStorage
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
-      await page.evaluate(() => {
-        localStorage.removeItem('auth');
-        localStorage.removeItem('refresh_token');
-      });
+      await clearAuthStorage(page);
     });
 
     test('redirects to login when accessing /resume/new', async ({ page }) => {
@@ -45,12 +41,8 @@ test.describe('Protected Routes', () => {
 
   test.describe('Authenticated Access', () => {
     test.beforeEach(async ({ page }) => {
-      // Set up authenticated state by setting token in localStorage
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
-      await page.evaluate(() => {
-        localStorage.setItem('auth', 'mock-access-token-12345');
-        localStorage.setItem('refresh_token', 'mock-refresh-token-12345');
-      });
+      await seedAuthStorage(page);
+      await blockGoogleApis(page);
     });
 
     test('allows access to /resume/new when authenticated', async ({ page }) => {
